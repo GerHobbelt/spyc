@@ -1,11 +1,11 @@
 <?php
 /**
    * Spyc -- A Simple PHP YAML Class
-   * @version 0.4.5
+   * @version 0.5
    * @author Vlad Andersen <vlad.andersen@gmail.com>
    * @author Chris Wanstrath <chris@ozmm.org>
    * @link http://code.google.com/p/spyc/
-   * @copyright Copyright 2005-2006 Chris Wanstrath, 2006-2009 Vlad Andersen
+   * @copyright Copyright 2005-2006 Chris Wanstrath, 2006-2011 Vlad Andersen
    * @license http://www.opensource.org/licenses/mit-license.php MIT License
    * @package Spyc
    */
@@ -57,6 +57,8 @@ if (!function_exists('spyc_load_file')) {
 class Spyc {
 
   // SETTINGS
+
+  const REMPTY = "\0\0\0\0\0";
 
   /**
    * Setting this to true will force YAMLDump to enclose any string value in
@@ -255,7 +257,7 @@ class Spyc {
         return $this->_dumpNode($key, array(), $indent, $previous_key, $first_key, $source_array);
       // It has children.  What to do?
       // Make it the right kind of item
-      $string = $this->_dumpNode($key, NULL, $indent, $previous_key, $first_key, $source_array);
+      $string = $this->_dumpNode($key, self::REMPTY, $indent, $previous_key, $first_key, $source_array);
       // Add the indent
       $indent += $this->_dumpIndent;
       // Yamlize the array
@@ -319,6 +321,9 @@ class Spyc {
     if (is_bool($value)) {
        $value = ($value) ? "true" : "false";
     }
+    
+    if ($value === null) $value = 'null';
+    if ($value === "'" . self::REMPTY . "'") $value = null;
 
     $spaces = str_repeat(' ',$indent);
 
@@ -375,7 +380,7 @@ class Spyc {
       $wrapped = wordwrap($value,$this->_dumpWordWrap,"\n$indent");
       $value   = ">\n".$indent.$wrapped;
     } else {
-      if ($this->setting_dump_force_quotes && is_string ($value))
+      if ($this->setting_dump_force_quotes && is_string ($value) && $value !== self::REMPTY)
         $value = '"' . $value . '"';
     }
 
@@ -421,9 +426,9 @@ class Spyc {
         $line = rtrim ($line, $literalBlockStyle . " \n");
         $literalBlock = '';
         $line .= $this->LiteralPlaceHolder;
-
+        $literal_block_indent = strlen($Source[$i+1]) - strlen(ltrim($Source[$i+1]));
         while (++$i < $cnt && $this->literalBlockContinues($Source[$i], $this->indent)) {
-          $literalBlock = $this->addLiteralLine($literalBlock, $Source[$i], $literalBlockStyle);
+          $literalBlock = $this->addLiteralLine($literalBlock, $Source[$i], $literalBlockStyle, $literal_block_indent);
         }
         $i--;
       }
@@ -834,8 +839,11 @@ class Spyc {
     return false;
   }
 
-  private function addLiteralLine ($literalBlock, $line, $literalBlockStyle) {
-    $line = self::stripIndent($line);
+  private function addLiteralLine ($literalBlock, $line, $literalBlockStyle, $indent = -1) {
+    $line = self::stripIndent($line, $indent);
+    if ($literalBlockStyle !== '|') {
+        $line = self::stripIndent($line);
+    }
     $line = rtrim ($line, "\r\n\t ") . "\n";
     if ($literalBlockStyle == '|') {
       return $literalBlock . $line;
